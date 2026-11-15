@@ -9,6 +9,8 @@ import {
   WazobiaValidationError,
   WazobiaRateLimitError,
   WazobiaTimeoutError,
+  type AttachmentUploadResponse,
+  type FileAttachment,
   type SendMessageRequest,
   type SendMessageResponse,
   type WazobiaClientOptions,
@@ -126,6 +128,48 @@ export async function sendReactEmail(
   });
 }
 
+export interface ServerAttachmentRequestOptions {
+  /** Optional explicit `WazobiaMail` client instance. */
+  client?: WazobiaMail;
+  /** Optional client options used when creating a client on demand. */
+  clientOptions?: WazobiaClientOptions;
+  idempotencyKey?: string;
+}
+
+/**
+ * Sends a transactional email with binary file attachments on the Next.js server.
+ */
+export async function sendWithAttachments(
+  payload: SendMessageRequest,
+  attachments: FileAttachment[],
+  options: ServerAttachmentRequestOptions = {}
+): Promise<SendMessageResponse> {
+  assertServerRuntime();
+  const client = options.client ?? getWazobiaClient(options.clientOptions);
+  return client.messages.sendWithAttachments(
+    payload,
+    attachments,
+    options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined
+  );
+}
+
+/**
+ * Uploads an attachment file to the WazobiaMail CDN from a Next.js Server Component, Route Handler, or Server Action.
+ */
+export async function uploadAttachment(
+  file: Blob | Uint8Array | string | FileAttachment,
+  fileName?: string,
+  options: ServerAttachmentRequestOptions = {}
+): Promise<AttachmentUploadResponse> {
+  assertServerRuntime();
+  const client = options.client ?? getWazobiaClient(options.clientOptions);
+  return client.messages.uploadAttachment(
+    file,
+    fileName,
+    options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined
+  );
+}
+
 export type SendEmailActionInput =
   | (SendMessageRequest & { react?: undefined })
   | (Omit<SendReactEmailPayload, 'react'> & { react?: ReactElement });
@@ -161,7 +205,9 @@ export function createSendEmailAction(
             { ...(input as SendReactEmailPayload), from, react: input.react },
             { renderOptions: defaults.renderOptions }
           )
-        : await client.messages.send({ ...(input as SendMessageRequest), from });
+        : input.files && input.files.length > 0
+          ? await client.messages.sendWithAttachments({ ...(input as SendMessageRequest), from }, input.files)
+          : await client.messages.send({ ...(input as SendMessageRequest), from });
 
       return { ok: true, data: response.data };
     } catch (err) {

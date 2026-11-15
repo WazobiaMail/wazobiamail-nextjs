@@ -6,6 +6,8 @@ import {
   getWazobiaClient,
   resetWazobiaClient,
   sendReactEmail,
+  sendWithAttachments,
+  uploadAttachment,
   createSendEmailAction,
 } from '../src/server';
 
@@ -121,5 +123,46 @@ describe('wazobiamail-nextjs/server', () => {
       ok: false,
       error: 'Upstream validation failed',
     });
+  });
+
+  it('supports binary file attachments via sendWithAttachments, uploadAttachment, and createSendEmailAction', async () => {
+    const client = new WazobiaMail({ apiKey: 'wzbm_test_mock_key' });
+    let capturedMultipartFiles = 0;
+
+    client.messages.sendWithAttachments = mock(async (_payload, files) => {
+      capturedMultipartFiles = files.length;
+      return {
+        success: true,
+        message: 'Queued',
+        data: { result: { status: 'queued', trackingId: 'trk_att_next', recipients: 1 } },
+      };
+    }) as any;
+
+    client.messages.uploadAttachment = mock(async (_file, fileName) => ({
+      success: true,
+      message: 'Uploaded',
+      data: { file: { fileName: fileName || 'doc.pdf', sizeBytes: 4, publicUrl: 'https://cdn.example.com/doc.pdf' } },
+    })) as any;
+
+    const uploaded = await uploadAttachment(new Uint8Array([1, 2, 3, 4]), 'doc.pdf', { client });
+    expect(uploaded.data.file.fileName).toBe('doc.pdf');
+
+    const sent = await sendWithAttachments(
+      { from: 'noreply@acme.com', to: 'buyer@example.com', subject: 'Invoice' },
+      [{ fileName: 'doc.pdf', content: new Uint8Array([1, 2, 3, 4]), contentType: 'application/pdf' }],
+      { client }
+    );
+    expect(sent.data.result.trackingId).toBe('trk_att_next');
+    expect(capturedMultipartFiles).toBe(1);
+
+    const action = createSendEmailAction({ client, defaultFrom: 'noreply@acme.com' });
+    const actionRes = await action({
+      to: 'buyer@example.com',
+      subject: 'React Invoice',
+      react: <OrderConfirmation orderId="99" />,
+      files: [{ fileName: 'doc.pdf', content: 'bytes', contentType: 'application/pdf' }],
+    });
+    expect(actionRes.ok).toBe(true);
+    expect(client.messages.sendWithAttachments).toHaveBeenCalledTimes(2);
   });
 });

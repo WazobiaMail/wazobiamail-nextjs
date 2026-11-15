@@ -1,6 +1,6 @@
 {
   "name": "wazobiamail-nextjs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official Next.js App Router, Pages Router, Server Actions, React Email, and Webhook SDK for WazobiaMail",
   "keywords": [
     "wazobiamail",
@@ -87,8 +87,8 @@
     "prepublishOnly": "bun run build && bun test"
   },
   "dependencies": {
-    "wazobiamail": "^0.1.0",
-    "wazobiamail-react": "^0.1.0"
+    "wazobiamail": "^0.1.1",
+    "wazobiamail-react": "^0.1.1"
   },
   "peerDependencies": {
     "@react-email/render": ">=0.0.10",
